@@ -1,0 +1,228 @@
+# ==================================================================================================#
+#                                       Question 1                                                  #
+# ==================================================================================================#
+# clean the environment
+rm(list=ls())
+
+# Get the file path to folder "Docs" where documents are located
+cname = file.path("Desktop/FIT3152/Assignment 3/Docs")
+cname
+
+print(dir(cname))
+
+# ==================================================================================================#
+#                                       Question 2                                                  #
+# ==================================================================================================#
+library(slam)
+library(tm)
+library(SnowballC)
+
+# Create Corpus 
+Documents = Corpus(DirSource(cname))
+print(summary(Documents))
+
+# ==================================================================================================#
+#                                       Question 3                                                  #
+# ==================================================================================================#
+# Creating Tokenisation
+Documents = tm_map(Documents, removeNumbers)
+Documents = tm_map(Documents, removePunctuation)
+Documents = tm_map(Documents, content_transformer(tolower))
+
+# Filtering words
+# Removing stop words and white spaces
+Documents = tm_map(Documents, removePunctuation)
+Documents = tm_map(Documents, stripWhitespace)
+Documents =  tm_map(Documents, content_transformer(tolower))
+
+# Stem 
+Documents = tm_map(Documents, stemDocument, language = "english")
+
+# Create document term matrix
+dtm <- DocumentTermMatrix(Documents)
+dtm_df = as.data.frame(as.matrix(dtm))
+write.csv(dtm_df, "dtm.csv", row.names = TRUE)
+
+# Remove sparse terms
+dim(dtm)
+dtm = removeSparseTerms(dtm, 0.68)
+
+# Checking the number of tokens
+token_number <- ncol(dtm)
+token_number
+
+# It is mentioned that the number of tokens should contain approximately 20. After several trial and 
+# errors, the tokens that I have achieved is 22
+
+# ==================================================================================================#
+#                                       Question 4                                                  #
+# ==================================================================================================#
+library(dendextend)
+library(ggplot2)
+library(cluster)
+library(proxy)
+library(factoextra)
+
+# convert to matrix
+dtm_matrix = as.matrix(dtm_df)
+dtm_matrix
+
+# calculate cosine distance
+cosine_distmatrix = 1 - (proxy :: dist(dtm_matrix, method = "cosine"))
+print(cosine_distmatrix)
+
+# the highest cosine similarity is between “Singapore_Horse_Riding” and “Euro_Recession” 
+# with cosine similarity of 0.5840158, whereas the lowest cosine distance is between 
+# “Heart_of_Stone” and “Devin_Boxing” with cosine similarity of 0.1406012.
+
+# clustering 
+fit = hclust(cosine_distmatrix, method = "ward.D2")
+
+# plotting the cluster
+plot(fit, xlab = "Documents")
+plot(fit, hang = -1, xlab = "Documents")
+
+# the smallest possible amount of branches that the diagram contains is 2. 
+
+# Creating the dendrogram
+dendogram <- as.dendrogram(fit)
+
+# Plotting the dendrogram
+plot(dendogram)
+title(main = "Cluster Dendogram", xlab = "Height", ylab = "Documents")
+
+# Partitioning the model according to desired number of clusters
+groups = cutree(fit, k = 3)
+groups
+
+# As groups is unsorted, sort the groups
+sort(groups)
+
+# Create Matrix
+Document_topic = c("Brave_New_World", "Canada_Hazard", "Canada_Wildfire", "Canelo_Boxing", 
+                   "Devin_Boxing", "Euro_Recession",  "Fast_X_Review",  "French_Open_Tennis",
+                   "Haunted_Mansion",  "Heart_of_Stone",  "HK_TikTok",  "Joshua_Wilder_Boxing", 
+                   "Stabbing_Victims", "Insidious_Review",  "Singapore_Horse_Riding" )
+Doc_CM = table(GroupNames = Document_topic, Clusters = groups)
+Doc_CM
+
+# Calculate Accuracy
+Doc_Acc <- (round(sum(diag(Doc_CM)) / sum(Doc_CM), 4)) *100
+Doc_Acc
+
+# Low accuracy of 6.67%
+
+# ==================================================================================================#
+#                                       Question 5                                                  #
+# ==================================================================================================#
+library(igraph)
+library(igraphdata)
+
+# Create Abstract Matrix
+# start with original document-term matrix
+dtmsx = as.matrix(dtm_df)
+
+# convert to binary matrix
+dtmsx = as.matrix((dtmsx > 0) + 0)
+
+# multiply binary matrix by its transpose
+abstract_matrix = dtmsx %*% t(dtmsx)
+
+# make leading diagonal zero
+diag(abstract_matrix) = 0
+
+# create graph object
+abstract_graph = graph_from_adjacency_matrix(abstract_matrix, mode = "undirected", weighted = TRUE)
+plot(abstract_graph)
+
+# calculate stats from the graph object
+format(closeness(abstract_graph), digits = 2)
+
+# The graph shows there are relations to every and each of the documents. HK_TikTok has the 
+# highest closeness value of "0.0120" whereas Brave_New_World has the lowest closeness 
+# value of "0.0059"
+
+# Check most important 
+graph.density(abstract_graph)
+diameter(abstract_graph)
+transitivity(abstract_graph)
+closeness(abstract_graph)
+betweenness(abstract_graph)
+degree(abstract_graph)
+
+# HK_TikTok has the highest closeness and betweenness as the degree is same throughout the entire documents
+# Hence, the most important document is HK_TikTok
+
+order(closeness(abstract_graph), decreasing = T) 
+order(betweenness(abstract_graph), decreasing = T) 
+order(degree(abstract_graph), decreasing = T)
+
+# 4 appears the top in both closeness and betweennes and 2 appears twice in betweenness and degree
+# and 8 appears twice in closeness and betweenness. Hence, these vertex are the most important
+
+# Identify communities in the network
+communities <- cluster_fast_greedy(abstract_graph)
+membership <- membership(communities)
+
+# Calculate the closeness centrality
+closeness_centrality <- closeness(abstract_graph)
+
+# Get the central nodes based on closeness centrality
+central_nodes <- closeness_centrality / max(closeness_centrality)
+
+# Set the size and color of the nodes based on centrality and communities
+node_size <- central_nodes * 10
+node_color <- rainbow(length(communities))[membership]
+
+# Improved visualization of the network
+plot(abstract_graph,  vertex.size = node_size, vertex.color = node_color, edge.width = 0.5)
+
+# Graph modified to show the closeness centrality through the node size and node color
+
+# ==================================================================================================#
+#                                       Question 6                                                  #
+# ==================================================================================================#
+
+# Create Abstract Matrix by Token
+# start with original document-term matrix
+Token_matrix = as.matrix(dtm_df)
+
+# convert to binary matrix
+Token_matrix = as.matrix((Token_matrix > 0) + 0)
+
+# multiply transpose binary matrix by binary matrix
+ByTokenMatrix = t(Token_matrix) %*% Token_matrix 
+
+# make leading diagonal zero
+diag(ByTokenMatrix) = 0
+
+# create graph object
+abstract_graph = graph_from_adjacency_matrix(abstract_matrix, mode = "undirected", weighted = TRUE)
+plot(abstract_graph)
+
+
+
+# ==================================================================================================#
+#                                       Question 7                                                  #
+# ==================================================================================================#
+
+
+# start with document term matrix dtms
+dtmsa = as.data.frame(dtm_df) # clone dtms
+dtm_df$ABS = rownames(dtm_df) # add row names
+
+dtmsb = data.frame()
+for (i in 1:nrow(dtm_df)){
+  for (j in 1:(ncol(dtm_df)-1)){
+    touse = cbind(dtm_df[i,j], dtm_df[i,ncol(dtm_df)], colnames(dtm_df[j]))
+    dtmsb = rbind(dtmsb, touse ) } } # close loops
+colnames(dtmsb) = c("weight", "abs", "token")
+dtmsc = dtmsb[dtmsb$weight != 0,] # delete 0 weights
+
+# put colunms in order: abs, token, weight
+dtmsc = dtmsc[,c(2,3,1)]
+
+# create graph object and declare bipartite
+g <- graph.data.frame(dtmsc, directed=FALSE)
+bipartite.mapping(g)
+plot(g)
