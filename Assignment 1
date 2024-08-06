@@ -1,0 +1,116 @@
+rm(list=ls())
+
+# ==================================================================================================
+#
+#                                       Question 1
+# (a) Describe the data overall, including things such as dimension, data types, 
+# distribution of numerical attributes, variety of non-numerical (text) attributes, 
+# missing values, and anything else of interest or relevance.
+
+# (b) Comment on any pre-processing or data manipulation required for the following analysis.
+# ==================================================================================================
+library(readr)
+set.seed(32810806) 
+cvbase = read.csv("Desktop/FIT3152/Assignment1/PsyCoronaBaselineExtract.csv", header = TRUE)
+cvbase <- cvbase[sample(nrow(cvbase), 40000), ] 
+View(cvbase)
+
+
+# Before starting answering the questions, I have to read the csv file first to be 
+# able to start manipulating the datas and identifying the necessary datas.
+
+# (a)
+dim(cvbase)
+class(cvbase)
+colnames(cvbase)
+summary(cvbase)
+str(cvbase)
+head(cvbase)
+
+# (b)
+cvbase[is.na(cvbase)] = 0
+summary(cvbase)
+
+# ==================================================================================================
+#
+#                                       Question 2
+# (a) Identify your focus country from the accompanying list (FocusCountryByID.pdf). How do 
+# participant responses for your focus country differ from the other countries in the survey
+# as a group?
+
+# (b) How well do participant responses (attributes) predict pro-social attitudes 
+# (c19ProSo01,2,3 and 4) for your focus country? Which attributes seem to be the best predictors? 
+# Explain your reasoning.
+
+# (c) Repeat Question 2(b) for the other countries as a group. Which attributes are the 
+# strongest predictors? How do these attributes compare to those of your focus country?
+# ==================================================================================================
+library(dplyr)
+# (a)
+focused_country <- cvbase %>% 
+  filter(coded_country == 'South Korea')
+head(focused_country)
+summary(focused_country)
+
+non_focused <- cvbase %>%
+  filter(coded_country != 'South Korea')
+head(non_focused)
+summary(non_focused)
+
+
+# (b)
+library(ggplot2)
+summary(lm(focused_country$c19ProSo01~.,data = focused_country))
+summary(lm(focused_country$c19ProSo02~.,data = focused_country))
+summary(lm(focused_country$c19ProSo03~.,data = focused_country))
+summary(lm(focused_country$c19ProSo04~.,data = focused_country))
+# Pick Pr(>|t|) less than 0.05
+
+# (c)
+summary(lm(non_focused$c19ProSo01~.,data = non_focused))
+summary(lm(non_focused$c19ProSo02~.,data = non_focused))
+summary(lm(non_focused$c19ProSo03~.,data = non_focused))
+summary(lm(non_focused$c19ProSo04~.,data = non_focused))
+# Pick Pr(>|t|) less than 0.05
+
+# ==================================================================================================
+#
+#                                       Question 3
+# (a) Using several social, economic, health, political or other indicators, identify 
+# between 3 and 7 countries (in the baseline data) that are similar to your focus country 
+# using clustering. Van Lissa (2022) refers to several indicators you might consider, among others. 
+# Some of these are listed in the references, but these are not exhaustive. State the indicators used 
+# and describe how you calculated/identified similar countries. Copy and paste the table of values you 
+# used for your clustering into your report as an Appendix.
+
+# (b) How well do participant responses predict pro-social attitudes (c19ProSo01,2,3 and 4) for 
+# this cluster of similar countries? Which attributes are the strongest predictors? How do these 
+# attributes compare to those of your focus country? Comment on the similarity and/or difference 
+# between your results for this question and Question 2(c). That is, does the group of all other 
+# countries 2(c), or the cluster of similar countries 3(b) give a better match to the important 
+# attributes for predicting pro-social attitudes in your focus country? Discuss.
+# ==================================================================================================
+focused_country = focused_country %>%
+  select(-coded_country)
+
+focused_country[,1:53] = scale(focused_country[,1:53])
+
+cvfit = kmeans(focused_country[,1:53],7,nstart = 10)
+cvbase_N = focused_country
+cvbase_N[,1:53] = scale(cvbase_N[,1:53])
+cvfit_N = kmeans(cvbase_N[,1:53],7,nstart = 12)
+ggplot(focused_country, aes(affRel, lifeSat, color = factor(cvfit$cluster))) + geom_point() + geom_jitter(width = 0.01)
+ggplot(focused_country, aes(lifeSat, age, color = factor(cvfit$cluster))) + geom_point() + geom_jitter(width = 0.01)
+T1 = table(actual_edu = focused_country$edu, fitted_clusters = cvfit$cluster) 
+T1 = as.data.frame.matrix(T1)
+T1 = T1[,c(1,5,3,7,6,4,2)]
+colnames(T1) = 1:7
+print(T1)
+
+T2 = table(actual_edu = cvbase_N$edu, fitted_clusters = cvfit_N$cluster)
+T2 = as.data.frame.matrix(T2)
+T2 = T2[,c(1,2,3,4,5,6,7)]
+colnames(T2) = 1:7
+cvfit$cluster = as.factor(cvfit$cluster)
+print(T2)
+cvfit$cluster = as.factor(cvfit$cluster)
